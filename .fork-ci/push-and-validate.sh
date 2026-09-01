@@ -12,10 +12,16 @@ if [[ -z $branch || $branch == fork-ci ]]; then
 fi
 
 git push "$remote" "HEAD:$branch"
+target_ref=$(git ls-remote --exit-code "$remote" "refs/heads/$branch" | awk '{print $1}')
+if [[ ! $target_ref =~ ^[0-9a-f]{40}$ ]]; then
+  echo "could not resolve $remote/$branch to a commit" >&2
+  exit 2
+fi
+
 gh workflow run fork-validate.yml \
   --repo honeyspoon/cutile-rs \
   --ref fork-ci \
-  -f "target_ref=$branch" \
+  -f "target_ref=$target_ref" \
   -f base_ref=main
 
-echo "Dispatched fork validation for $branch"
+echo "Dispatched fork validation for $branch at $target_ref"
