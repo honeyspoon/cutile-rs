@@ -117,14 +117,14 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --locked -p cuda-core --no-deps
 
-      - name: Compile default workspace targets
-        working-directory: source
-        run: cargo test --locked --no-run
-
       - name: Differential check against CUDA 13.3
         run: >-
           ci/.fork-ci/run_narrow_float_oracle.sh
           "${GITHUB_WORKSPACE}/source"
+
+      - name: Compile default workspace targets
+        working-directory: source
+        run: cargo test --locked --no-run
 
   msrv:
     runs-on: ubuntu-24.04
