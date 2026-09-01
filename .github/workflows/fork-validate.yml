@@ -1,0 +1,27 @@
+---
+name: fork-validate
+
+# Fork-only dispatcher. Contribution branches are based on NVlabs/main and do
+# not contain this file; the reusable implementation lives on `fork-ci`.
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Branch, tag, or commit to validate
+        required: true
+        type: string
+      base_ref:
+        description: Official NVlabs base branch
+        default: main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: honeyspoon/cutile-rs/.github/workflows/fork-validate.yml@fork-ci
+    with:
+      target_ref: ${{ inputs.target_ref }}
+      base_ref: ${{ inputs.base_ref }}
