@@ -1,0 +1,155 @@
+---
+name: fork-validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Branch, tag, or commit to validate
+        required: true
+        type: string
+      base_ref:
+        description: Official NVlabs base branch
+        default: main
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      target_ref:
+        required: true
+        type: string
+      base_ref:
+        default: main
+        required: false
+        type: string
+
+concurrency:
+  group: fork-validate-${{ inputs.target_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout fork-only tooling
+        uses: actions/checkout@v7
+        with:
+          ref: fork-ci
+          path: ci
+
+      - name: Checkout target
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_ref }}
+          fetch-depth: 0
+          path: source
+
+      - name: Fetch official base
+        working-directory: source
+        run: |
+          git remote add official https://github.com/NVlabs/cutile-rs.git
+          git fetch --no-tags official "${{ inputs.base_ref }}"
+
+      - name: Contributor policy checks
+        run: python3 ci/.fork-ci/pr_policy.py source "official/${{ inputs.base_ref }}"
+
+  quality:
+    runs-on: ubuntu-24.04
+    container:
+      image: nvidia/cuda:13.3.0-devel-ubuntu24.04
+      env:
+        DEBIAN_FRONTEND: noninteractive
+        CUDA_TOOLKIT_PATH: /usr/local/cuda
+    timeout-minutes: 45
+    steps:
+      - name: Install host dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git libclang-dev pkg-config
+
+      - name: Checkout fork-only tooling
+        uses: actions/checkout@v7
+        with:
+          ref: fork-ci
+          path: ci
+
+      - name: Checkout target
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_ref }}
+          fetch-depth: 0
+          path: source
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable \
+              --component clippy,rustfmt
+          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
+
+      - name: Formatting
+        working-directory: source
+        run: cargo fmt --all -- --check
+
+      - name: Clippy without inherited baseline debt
+        working-directory: source
+        run: |
+          cargo clippy --locked -p cuda-core --all-targets --no-deps -- \
+            -A clippy::empty-line-after-doc-comments \
+            -A clippy::missing-safety-doc \
+            -D warnings
+
+      - name: Narrow-float tests (debug and release)
+        working-directory: source
+        run: |
+          cargo test --locked -p cuda-core dtype_convert
+          cargo test --locked --release -p cuda-core dtype_convert
+
+      - name: Rustdoc
+        working-directory: source
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --locked -p cuda-core --no-deps
+
+      - name: Compile default workspace targets
+        working-directory: source
+        run: cargo test --locked --no-run
+
+      - name: Differential check against CUDA 13.3
+        run: ci/.fork-ci/run_narrow_float_oracle.sh source
+
+  msrv:
+    runs-on: ubuntu-24.04
+    container:
+      image: nvidia/cuda:13.3.0-devel-ubuntu24.04
+      env:
+        DEBIAN_FRONTEND: noninteractive
+        CUDA_TOOLKIT_PATH: /usr/local/cuda
+    timeout-minutes: 20
+    steps:
+      - name: Install host dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git libclang-dev pkg-config
+
+      - name: Checkout target
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_ref }}
+          path: source
+
+      - name: Install declared MSRV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain 1.89.0
+          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
+
+      - name: Check cuda-core on Rust 1.89
+        working-directory: source
+        run: cargo check --locked -p cuda-core --lib

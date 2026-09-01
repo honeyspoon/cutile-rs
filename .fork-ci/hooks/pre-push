@@ -1,0 +1,36 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 Abderahmane Bouziane
+# SPDX-License-Identifier: Apache-2.0
+
+set -euo pipefail
+
+repo=$(git rev-parse --show-toplevel)
+git_dir=$(git rev-parse --git-common-dir)
+if [[ $git_dir != /* ]]; then
+  git_dir="$repo/$git_dir"
+fi
+branch=$(git branch --show-current)
+cat >/dev/null
+
+if [[ $branch == fork-ci ]]; then
+  exit 0
+fi
+
+cd "$repo"
+git fetch --quiet upstream main
+python3 "$git_dir/fork-ci/pr_policy.py" "$repo" upstream/main
+cargo fmt --all -- --check
+
+: "${CUDA_TOOLKIT_PATH:=/usr/local/cuda-13.3}"
+export CUDA_TOOLKIT_PATH
+if [[ -z ${BINDGEN_EXTRA_CLANG_ARGS:-} ]]; then
+  BINDGEN_EXTRA_CLANG_ARGS="-I$(gcc -print-file-name=include)"
+  export BINDGEN_EXTRA_CLANG_ARGS
+fi
+cargo test --locked -p cuda-core dtype_convert
+cargo test --locked --release -p cuda-core dtype_convert
+cargo clippy --locked -p cuda-core --all-targets --no-deps -- \
+  -A clippy::empty-line-after-doc-comments \
+  -A clippy::missing-safety-doc \
+  -D warnings
+RUSTDOCFLAGS='-D warnings' cargo doc --locked -p cuda-core --no-deps

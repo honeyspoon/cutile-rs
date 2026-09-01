@@ -1,0 +1,29 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 Abderahmane Bouziane
+# SPDX-License-Identifier: Apache-2.0
+
+set -euo pipefail
+
+repo=$(git rev-parse --show-toplevel)
+cd "$repo"
+branch=$(git branch --show-current)
+
+git diff --cached --check
+
+if [[ $branch != fork-ci ]] && git diff --cached --name-only \
+  | grep -Eq '^(\.fork-ci/|\.github/workflows/fork-validate\.yml$)'; then
+  echo "fork-only CI files cannot be committed to contribution branch $branch" >&2
+  exit 1
+fi
+
+cargo fmt --all -- --check
+
+if git diff --cached --name-only | grep -q '^cuda-core/'; then
+  : "${CUDA_TOOLKIT_PATH:=/usr/local/cuda-13.3}"
+  export CUDA_TOOLKIT_PATH
+  if [[ -z ${BINDGEN_EXTRA_CLANG_ARGS:-} ]]; then
+    BINDGEN_EXTRA_CLANG_ARGS="-I$(gcc -print-file-name=include)"
+    export BINDGEN_EXTRA_CLANG_ARGS
+  fi
+  cargo test --locked -p cuda-core dtype_convert
+fi
