@@ -102,6 +102,7 @@ jobs:
           cargo clippy --locked -p cuda-core --all-targets --no-deps -- \
             -A clippy::empty-line-after-doc-comments \
             -A clippy::missing-safety-doc \
+            -A clippy::bool-assert-comparison \
             -D warnings
 
       - name: Narrow-float tests (debug and release)

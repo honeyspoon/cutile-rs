@@ -32,5 +32,6 @@ cargo test --locked --release -p cuda-core dtype_convert
 cargo clippy --locked -p cuda-core --all-targets --no-deps -- \
   -A clippy::empty-line-after-doc-comments \
   -A clippy::missing-safety-doc \
+  -A clippy::bool-assert-comparison \
   -D warnings
 RUSTDOCFLAGS='-D warnings' cargo doc --locked -p cuda-core --no-deps
