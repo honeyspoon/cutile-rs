@@ -122,7 +122,9 @@ jobs:
         run: cargo test --locked --no-run
 
       - name: Differential check against CUDA 13.3
-        run: ci/.fork-ci/run_narrow_float_oracle.sh source
+        run: >-
+          ci/.fork-ci/run_narrow_float_oracle.sh
+          "${GITHUB_WORKSPACE}/source"
 
   msrv:
     runs-on: ubuntu-24.04

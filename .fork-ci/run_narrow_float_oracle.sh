@@ -5,6 +5,12 @@
 set -euo pipefail
 
 repo=${1:?usage: run_narrow_float_oracle.sh REPOSITORY}
+if [[ ! -d "$repo/cuda-core/examples" ]]; then
+  echo "not a cutile-rs checkout: $repo" >&2
+  exit 2
+fi
+
+repo=$(cd "$repo" && pwd)
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 rust_oracle="$repo/cuda-core/examples/fork_ci_narrow_float_oracle.rs"
 tmp_dir=$(mktemp -d)
